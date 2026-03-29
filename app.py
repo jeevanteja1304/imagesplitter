@@ -40,7 +40,6 @@ button, input {
 
 <input type="file" id="file"><br>
 
-<!-- NUMBER SPLIT -->
 <input type="number" id="hCount" placeholder="Horizontal splits (e.g 6)">
 <button onclick="createHorizontal()">Create Horizontal Splits</button>
 
@@ -49,7 +48,6 @@ button, input {
 
 <hr>
 
-<!-- MANUAL -->
 <button onclick="addLine('h')">Add Horizontal Line</button>
 <button onclick="addLine('v')">Add Vertical Line</button>
 <button onclick="clearLines()">Clear Lines</button>
@@ -87,7 +85,6 @@ document.getElementById("file").onchange = e => {
     reader.readAsDataURL(file);
 }
 
-// ===== NUMBER SPLIT =====
 function createHorizontal() {
     let n = parseInt(document.getElementById("hCount").value);
     if (!img || !n) return;
@@ -114,7 +111,6 @@ function createVertical() {
     draw();
 }
 
-// ===== MANUAL =====
 function addLine(type) {
     if (!img) return;
 
@@ -131,7 +127,6 @@ function clearLines() {
     draw();
 }
 
-// ===== DRAW =====
 function draw() {
     if (!img) return;
 
@@ -154,7 +149,6 @@ function draw() {
     }
 }
 
-// ===== DRAG FIX (IMPORTANT) =====
 function getPos(e) {
     let rect = canvas.getBoundingClientRect();
 
@@ -215,7 +209,6 @@ function end() {
     dragging = null;
 }
 
-// ===== DOWNLOAD =====
 function download() {
     if (!img || lines.length === 0) {
         alert("Add lines first!");
@@ -294,5 +287,8 @@ def split():
     zip_io.seek(0)
     return send_file(zip_io, as_attachment=True, download_name="split.zip")
 
+# ✅ THIS IS THE ONLY CHANGE FOR RENDER
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
