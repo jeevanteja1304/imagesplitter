@@ -1,8 +1,12 @@
 from flask import Flask, request, send_file, render_template_string
 from PIL import Image
-import io, json, zipfile
+import io, json, zipfile, os
 
 app = Flask(__name__)
+
+# ✅ IMPORTANT (Render fix)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
 
 HTML = """
 <!DOCTYPE html>
@@ -85,6 +89,7 @@ document.getElementById("file").onchange = e => {
     reader.readAsDataURL(file);
 }
 
+// ===== NUMBER SPLIT =====
 function createHorizontal() {
     let n = parseInt(document.getElementById("hCount").value);
     if (!img || !n) return;
@@ -111,6 +116,7 @@ function createVertical() {
     draw();
 }
 
+// ===== MANUAL =====
 function addLine(type) {
     if (!img) return;
 
@@ -127,6 +133,7 @@ function clearLines() {
     draw();
 }
 
+// ===== DRAW =====
 function draw() {
     if (!img) return;
 
@@ -149,6 +156,7 @@ function draw() {
     }
 }
 
+// ===== DRAG FIX =====
 function getPos(e) {
     let rect = canvas.getBoundingClientRect();
 
@@ -180,14 +188,8 @@ function start(e) {
     let p = getPos(e);
 
     for (let l of lines) {
-        if (l.type === 'h' && Math.abs(p.y - l.pos) < 20) {
-            dragging = l;
-            break;
-        }
-        if (l.type === 'v' && Math.abs(p.x - l.pos) < 20) {
-            dragging = l;
-            break;
-        }
+        if (l.type === 'h' && Math.abs(p.y - l.pos) < 20) dragging = l;
+        if (l.type === 'v' && Math.abs(p.x - l.pos) < 20) dragging = l;
     }
 }
 
@@ -196,11 +198,8 @@ function move(e) {
 
     let p = getPos(e);
 
-    if (dragging.type === 'h') {
-        dragging.pos = p.y;
-    } else {
-        dragging.pos = p.x;
-    }
+    if (dragging.type === 'h') dragging.pos = p.y;
+    else dragging.pos = p.x;
 
     draw();
 }
@@ -209,6 +208,7 @@ function end() {
     dragging = null;
 }
 
+// ===== DOWNLOAD FIX =====
 function download() {
     if (!img || lines.length === 0) {
         alert("Add lines first!");
@@ -219,18 +219,22 @@ function download() {
     form.append("image", document.getElementById("file").files[0]);
     form.append("lines", JSON.stringify(lines));
 
-    fetch("/split", {
+    fetch(window.location.origin + "/split", {
         method: "POST",
         body: form
     })
-    .then(res => res.blob())
+    .then(res => {
+        if (!res.ok) throw new Error("Server error");
+        return res.blob();
+    })
     .then(blob => {
         let url = URL.createObjectURL(blob);
         let a = document.createElement("a");
         a.href = url;
         a.download = "split.zip";
         a.click();
-    });
+    })
+    .catch(err => alert("Error: " + err));
 }
 </script>
 
@@ -244,8 +248,15 @@ def home():
 
 @app.route("/split", methods=["POST"])
 def split():
-    file = request.files["image"]
-    lines = json.loads(request.form["lines"])
+    file = request.files.get("image")
+    if not file:
+        return "No image uploaded", 400
+
+    lines_data = request.form.get("lines")
+    if not lines_data:
+        return "No lines provided", 400
+
+    lines = json.loads(lines_data)
 
     img = Image.open(file.stream)
     w, h = img.size
@@ -287,8 +298,7 @@ def split():
     zip_io.seek(0)
     return send_file(zip_io, as_attachment=True, download_name="split.zip")
 
-# ✅ THIS IS THE ONLY CHANGE FOR RENDER
+# ✅ Render compatible run
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
