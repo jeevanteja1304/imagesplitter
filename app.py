@@ -223,7 +223,7 @@ function end(){
     dragging=null;
 }
 
-// ===== DOWNLOAD HISTORY =====
+// ===== HISTORY =====
 let history=JSON.parse(localStorage.getItem("downloads")||"[]");
 
 function saveHistory(name){
@@ -239,7 +239,7 @@ function openDownloads(){
     alert("Open File Manager → Downloads folder");
 }
 
-// ===== DOWNLOAD =====
+// ===== DOWNLOAD (FIXED) =====
 function download(){
     if(!img||lines.length===0){
         alert("Add lines first!");
@@ -253,6 +253,8 @@ function download(){
     let name=zipName.value.trim();
     if(name==="") name="split_images";
 
+    if(!name.endsWith(".zip")) name += ".zip"; // 🔥 FIX
+
     fetch(window.location.origin+"/split",{method:"POST",body:form})
     .then(res=>res.blob())
     .then(blob=>{
@@ -260,10 +262,12 @@ function download(){
 
         let a=document.createElement("a");
         a.href=url;
-        a.download=name+".zip";
+        a.download=name;
+        document.body.appendChild(a);
         a.click();
+        a.remove();
 
-        saveHistory(name+".zip");
+        saveHistory(name);
     });
 }
 </script>
@@ -300,6 +304,7 @@ def split():
                 c+=1
 
     zip_io.seek(0)
+
     return send_file(
         zip_io,
         mimetype="application/zip",
