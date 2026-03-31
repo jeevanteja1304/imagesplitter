@@ -3,8 +3,6 @@ from PIL import Image
 import io, json, zipfile, os
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-
 
 HTML = """
 <!DOCTYPE html>
@@ -15,21 +13,18 @@ HTML = """
 
 <style>
 body { font-family: Arial; background:#f5f5f5; margin:0; }
-
 .container {
     max-width:600px;
     margin:auto;
     padding:15px;
     text-align:center;
 }
-
 canvas {
     width:100%;
     touch-action:none;
     border:1px solid #ccc;
     margin:20px 0;
 }
-
 button, input, select {
     width:95%;
     padding:10px;
@@ -87,7 +82,7 @@ let img=null, lines=[], dragging=null;
 
 // ===== LOAD IMAGE =====
 document.getElementById("file").onchange=e=>{
-    let file=e.target.files[0];
+    let fileData=e.target.files[0];
     let reader=new FileReader();
 
     reader.onload=function(){
@@ -100,7 +95,7 @@ document.getElementById("file").onchange=e=>{
         }
         img.src=reader.result;
     }
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileData);
 }
 
 // ===== VIEW MODE =====
@@ -112,7 +107,7 @@ function changeView(){
     else c.style.maxWidth="600px";
 }
 
-// ===== SPLITS =====
+// ===== AUTO SPLITS =====
 function createHorizontal(){
     let n=parseInt(hCount.value);
     if(!img||!n) return;
@@ -185,7 +180,7 @@ function getPos(e){
     return {x,y};
 }
 
-// ===== DRAG FIX =====
+// ===== DRAG =====
 canvas.addEventListener("mousedown",start);
 canvas.addEventListener("mousemove",move);
 canvas.addEventListener("mouseup",end);
@@ -208,7 +203,6 @@ function start(e){
 
 function move(e){
     if(!dragging) return;
-
     e.preventDefault();
 
     let p=getPos(e);
@@ -239,36 +233,39 @@ function openDownloads(){
     alert("Open File Manager → Downloads folder");
 }
 
-// ===== DOWNLOAD (FIXED) =====
+// ===== DOWNLOAD (FINAL FIX) =====
 function download(){
     if(!img||lines.length===0){
         alert("Add lines first!");
         return;
     }
 
-    let form=new FormData();
-    form.append("image", file.files[0]);
-    form.append("lines", JSON.stringify(lines));
+    let form=document.createElement("form");
+    form.method="POST";
+    form.action="/split";
+    form.enctype="multipart/form-data";
+
+    let fileInput=document.createElement("input");
+    fileInput.type="file";
+    fileInput.name="image";
+    fileInput.files=file.files;
+
+    let linesInput=document.createElement("input");
+    linesInput.type="hidden";
+    linesInput.name="lines";
+    linesInput.value=JSON.stringify(lines);
 
     let name=zipName.value.trim();
     if(name==="") name="split_images";
+    if(!name.endsWith(".zip")) name+=".zip";
 
-    if(!name.endsWith(".zip")) name += ".zip"; // 🔥 FIX
+    saveHistory(name);
 
-    fetch(window.location.origin+"/split",{method:"POST",body:form})
-    .then(res=>res.blob())
-    .then(blob=>{
-        let url=URL.createObjectURL(blob);
+    form.appendChild(fileInput);
+    form.appendChild(linesInput);
 
-        let a=document.createElement("a");
-        a.href=url;
-        a.download=name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        saveHistory(name);
-    });
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 
@@ -282,36 +279,33 @@ def home():
 
 @app.route("/split", methods=["POST"])
 def split():
-    file=request.files.get("image")
-    lines=json.loads(request.form.get("lines","[]"))
+    file = request.files.get("image")
+    lines = json.loads(request.form.get("lines", "[]"))
 
-    img=Image.open(file.stream)
-    w,h=img.size
+    img = Image.open(file.stream).convert("RGB")
+    w, h = img.size
 
-    xs=[0]+sorted([int(l['pos']) for l in lines if l['type']=='v'])+[w]
-    ys=[0]+sorted([int(l['pos']) for l in lines if l['type']=='h'])+[h]
+    xs = [0] + sorted([int(l['pos']) for l in lines if l['type']=='v']) + [w]
+    ys = [0] + sorted([int(l['pos']) for l in lines if l['type']=='h']) + [h]
 
-    zip_io=io.BytesIO()
+    zip_path = "output.zip"
 
-    with zipfile.ZipFile(zip_io,"w",zipfile.ZIP_DEFLATED) as z:
-        c=1
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        c = 1
         for i in range(len(ys)-1):
             for j in range(len(xs)-1):
-                crop=img.crop((xs[j],ys[i],xs[j+1],ys[i+1]))
-                b=io.BytesIO()
-                crop.save(b,format="PNG")
-                z.writestr(f"piece_{c}.png",b.getvalue())
-                c+=1
-
-    zip_io.seek(0)
+                crop = img.crop((xs[j], ys[i], xs[j+1], ys[i+1]))
+                img_bytes = io.BytesIO()
+                crop.save(img_bytes, format="PNG")
+                z.writestr(f"piece_{c}.png", img_bytes.getvalue())
+                c += 1
 
     return send_file(
-        zip_io,
-        mimetype="application/zip",
+        zip_path,
         as_attachment=True,
         download_name="split_images.zip"
     )
 
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",10000))
-    app.run(host="0.0.0.0",port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
