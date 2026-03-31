@@ -14,15 +14,10 @@ HTML = """
 <title>Image Splitter</title>
 
 <style>
-body {
-    font-family: Arial;
-    background:#f5f5f5;
-    margin:0;
-    padding:0;
-}
+body { font-family: Arial; background:#f5f5f5; margin:0; }
 
 .container {
-    max-width: 600px;
+    max-width:600px;
     margin:auto;
     padding:15px;
     text-align:center;
@@ -45,7 +40,6 @@ button, input, select {
 </head>
 
 <body>
-
 <div class="container">
 
 <h2>Image Splitter</h2>
@@ -57,10 +51,10 @@ button, input, select {
 <option value="desktop">Desktop View</option>
 </select>
 
-<input type="number" id="hCount" placeholder="Horizontal splits (e.g 6)">
+<input type="number" id="hCount" placeholder="Horizontal splits">
 <button onclick="createHorizontal()">Create Horizontal</button>
 
-<input type="number" id="vCount" placeholder="Vertical splits (e.g 2)">
+<input type="number" id="vCount" placeholder="Vertical splits">
 <button onclick="createVertical()">Create Vertical</button>
 
 <hr>
@@ -71,20 +65,28 @@ button, input, select {
 
 <hr>
 
+<input type="text" id="zipName" placeholder="Enter file name (optional)">
+
 <button onclick="download()">Download ZIP</button>
+<button onclick="showHistory()">Download History</button>
+<button onclick="openDownloads()">Where is my file?</button>
+
+<p style="color:gray;font-size:14px;">
+Files are saved in <b>Downloads</b> folder
+</p>
 
 <canvas id="canvas"></canvas>
 
 </div>
 
 <script>
-let canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
+let canvas=document.getElementById("canvas");
+let ctx=canvas.getContext("2d");
 
 let img=null, lines=[], dragging=null;
 
 // ===== LOAD IMAGE =====
-document.getElementById("file").onchange = e => {
+document.getElementById("file").onchange=e=>{
     let file=e.target.files[0];
     let reader=new FileReader();
 
@@ -101,29 +103,24 @@ document.getElementById("file").onchange = e => {
     reader.readAsDataURL(file);
 }
 
-// ===== VIEW MODE FIX =====
+// ===== VIEW MODE =====
 function changeView(){
-    let mode=document.getElementById("viewMode").value;
-    let container=document.querySelector(".container");
+    let mode=viewMode.value;
+    let c=document.querySelector(".container");
 
-    if(mode==="desktop"){
-        container.style.maxWidth="1000px";
-    } else {
-        container.style.maxWidth="600px";
-    }
+    if(mode==="desktop") c.style.maxWidth="1000px";
+    else c.style.maxWidth="600px";
 }
 
-// ===== NUMBER SPLIT =====
+// ===== SPLITS =====
 function createHorizontal(){
     let n=parseInt(hCount.value);
     if(!img||!n) return;
 
     lines=lines.filter(l=>l.type!='h');
-
     let gap=img.height/n;
-    for(let i=1;i<n;i++){
-        lines.push({type:'h',pos:i*gap});
-    }
+
+    for(let i=1;i<n;i++) lines.push({type:'h',pos:i*gap});
     draw();
 }
 
@@ -132,11 +129,9 @@ function createVertical(){
     if(!img||!n) return;
 
     lines=lines.filter(l=>l.type!='v');
-
     let gap=img.width/n;
-    for(let i=1;i<n;i++){
-        lines.push({type:'v',pos:i*gap});
-    }
+
+    for(let i=1;i<n;i++) lines.push({type:'v',pos:i*gap});
     draw();
 }
 
@@ -181,7 +176,6 @@ function draw(){
 // ===== POSITION =====
 function getPos(e){
     let r=canvas.getBoundingClientRect();
-
     let sx=canvas.width/r.width;
     let sy=canvas.height/r.height;
 
@@ -191,28 +185,22 @@ function getPos(e){
     return {x,y};
 }
 
-// ===== DRAG FIX (SCROLL + DRAG) =====
-canvas.addEventListener("mousedown", start);
-canvas.addEventListener("mousemove", move);
-canvas.addEventListener("mouseup", end);
+// ===== DRAG FIX =====
+canvas.addEventListener("mousedown",start);
+canvas.addEventListener("mousemove",move);
+canvas.addEventListener("mouseup",end);
 
-canvas.addEventListener("touchstart", start, { passive:false });
-canvas.addEventListener("touchmove", move, { passive:false });
-canvas.addEventListener("touchend", end);
+canvas.addEventListener("touchstart",start,{passive:false});
+canvas.addEventListener("touchmove",move,{passive:false});
+canvas.addEventListener("touchend",end);
 
 function start(e){
     let p=getPos(e);
     dragging=null;
 
     for(let l of lines){
-        if(l.type=='h' && Math.abs(p.y-l.pos)<15){
-            dragging=l;
-            break;
-        }
-        if(l.type=='v' && Math.abs(p.x-l.pos)<15){
-            dragging=l;
-            break;
-        }
+        if(l.type=='h' && Math.abs(p.y-l.pos)<15){ dragging=l; break;}
+        if(l.type=='v' && Math.abs(p.x-l.pos)<15){ dragging=l; break;}
     }
 
     if(dragging) e.preventDefault();
@@ -235,9 +223,25 @@ function end(){
     dragging=null;
 }
 
+// ===== DOWNLOAD HISTORY =====
+let history=JSON.parse(localStorage.getItem("downloads")||"[]");
+
+function saveHistory(name){
+    history.push(name);
+    localStorage.setItem("downloads",JSON.stringify(history));
+}
+
+function showHistory(){
+    alert(history.length ? history.join("\\n") : "No downloads yet");
+}
+
+function openDownloads(){
+    alert("Open File Manager → Downloads folder");
+}
+
 // ===== DOWNLOAD =====
 function download(){
-    if(!img || lines.length===0){
+    if(!img||lines.length===0){
         alert("Add lines first!");
         return;
     }
@@ -246,22 +250,21 @@ function download(){
     form.append("image", file.files[0]);
     form.append("lines", JSON.stringify(lines));
 
-    fetch(window.location.origin+"/split",{
-        method:"POST",
-        body:form
-    })
-    .then(r=>{
-        if(!r.ok) throw new Error("Error");
-        return r.blob();
-    })
+    let name=zipName.value.trim();
+    if(name==="") name="split_images";
+
+    fetch(window.location.origin+"/split",{method:"POST",body:form})
+    .then(res=>res.blob())
     .then(blob=>{
         let url=URL.createObjectURL(blob);
+
         let a=document.createElement("a");
         a.href=url;
-        a.download="split.zip";
+        a.download=name+".zip";
         a.click();
-    })
-    .catch(err=>alert("Download failed"));
+
+        saveHistory(name+".zip");
+    });
 }
 </script>
 
@@ -275,34 +278,35 @@ def home():
 
 @app.route("/split", methods=["POST"])
 def split():
-    file = request.files.get("image")
-    if not file:
-        return "No image", 400
+    file=request.files.get("image")
+    lines=json.loads(request.form.get("lines","[]"))
 
-    lines = json.loads(request.form.get("lines", "[]"))
+    img=Image.open(file.stream)
+    w,h=img.size
 
-    img = Image.open(file.stream)
-    w, h = img.size
+    xs=[0]+sorted([int(l['pos']) for l in lines if l['type']=='v'])+[w]
+    ys=[0]+sorted([int(l['pos']) for l in lines if l['type']=='h'])+[h]
 
-    xs = [0] + sorted([int(l['pos']) for l in lines if l['type']=='v']) + [w]
-    ys = [0] + sorted([int(l['pos']) for l in lines if l['type']=='h']) + [h]
+    zip_io=io.BytesIO()
 
-    zip_io = io.BytesIO()
-
-    with zipfile.ZipFile(zip_io, "w") as z:
-        c = 1
+    with zipfile.ZipFile(zip_io,"w",zipfile.ZIP_DEFLATED) as z:
+        c=1
         for i in range(len(ys)-1):
             for j in range(len(xs)-1):
-                crop = img.crop((xs[j], ys[i], xs[j+1], ys[i+1]))
-                b = io.BytesIO()
-                crop.save(b, format="PNG")
-                z.writestr(f"piece_{c}.png", b.getvalue())
-                c += 1
+                crop=img.crop((xs[j],ys[i],xs[j+1],ys[i+1]))
+                b=io.BytesIO()
+                crop.save(b,format="PNG")
+                z.writestr(f"piece_{c}.png",b.getvalue())
+                c+=1
 
     zip_io.seek(0)
-    return send_file(zip_io, as_attachment=True, download_name="split.zip")
+    return send_file(
+        zip_io,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="split_images.zip"
+    )
 
-# Render fix
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",10000))
+    app.run(host="0.0.0.0",port=port)
